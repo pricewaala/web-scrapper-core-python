@@ -1,12 +1,9 @@
-import asyncio
-
-import aioredis
+import redis
 import requests
+from bs4 import BeautifulSoup
 from fastapi import FastAPI
 
 from ProductDetails import Product
-from bs4 import BeautifulSoup
-
 
 app = FastAPI()
 
@@ -187,23 +184,31 @@ async def search_amazon_products(search_query: str, page: int = 1, page_size: in
 
 
 async def update_redis_cache(redis_url, products):
-    async with aioredis.from_url(redis_url) as redis:
-        for product in products:
-            image_str = ','.join(product.image)
-            product_data = {
-                'name': product.name,
-                'description': product.description,
-                'ratingStar': product.ratingStar,
-                'ratingCount': product.ratingCount,
-                'price': product.price,
-                'exchange': product.exchange,
-                'image': image_str,
-            }
-            await redis.set(product.link, str(product_data))
+    # Create a Redis client
+    redis_client = redis.Redis.from_url(redis_url)
+
+    # Iterate over each product
+    for product in products:
+        # Join the image URLs into a comma-separated string
+        image_str = ','.join(product.image)
+
+        # Create a dictionary of product data
+        product_data = {
+            'name': product.name,
+            'description': product.description,
+            'ratingStar': product.ratingStar,
+            'ratingCount': product.ratingCount,
+            'price': product.price,
+            'exchange': product.exchange,
+            'image': image_str,
+        }
+
+        # Set the product data as a string value in Redis
+        redis_client.set(product.link, str(product_data))
 
 @app.post("/v2/amazon/{search_query}/update_cache")
 async def update_amazon_cache(search_query: str,
                               redis_url: str = "redis://default:LzwBDIEMPTPC3WSf29nOuER5itpalbsJ@redis-12457.c93.us-east-1-3.ec2.cloud.redislabs.com:12457"):
     products = await search_amazon_products(search_query)
-    asyncio.create_task(update_redis_cache(redis_url, products))
-    return {"message": "Cache update initiated in the background."}
+    await update_redis_cache(redis_url, products)
+    return {"message": "Cache update complete."}

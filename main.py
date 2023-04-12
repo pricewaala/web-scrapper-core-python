@@ -275,7 +275,7 @@ async def search_amazon_products(search_query: str, page: int = 1, page_size: in
     num_workers = min(num_links, 23)
 
     # Create a thread pool and submit the fetch_product_data coroutine for each link in updated_list
-    with ThreadPoolExecutor(max_workers=8) as executor:
+    with ThreadPoolExecutor(max_workers=num_workers) as executor:
         futures = [executor.submit(asyncio.run, fetch_product_data(link)) for link in updated_list]
         for future in futures:
             future.result()

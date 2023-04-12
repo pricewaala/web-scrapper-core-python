@@ -524,3 +524,76 @@ async def update_amazon_cache(search_query: str,
     products = await search_amazon_products(search_query)
     await update_redis_cache(redis_url, products)
     return {"message": "Cache update complete."}
+
+import aiohttp
+import asyncio
+import async_timeout
+from bs4 import BeautifulSoup
+from typing import List
+from urllib.parse import urljoin
+
+from fastapi import FastAPI
+
+async def get_html(url: str) -> str:
+    async with aiohttp.ClientSession() as session:
+        async with async_timeout.timeout(10):
+            async with session.get(url) as response:
+                return await response.text()
+
+async def fetch_product_data(link: str) -> dict:
+    url = urljoin('https://www.amazon.in', link)
+    html = await get_html(url)
+    soup = BeautifulSoup(html, "html.parser")
+    all_product_section = soup.find("div", id="dp-container")
+    while all_product_section is None :
+        # Retry fetching the HTML page up to 3 times
+        html = await get_html(url)
+        soup = BeautifulSoup(html, "html.parser")
+        all_product_section = soup.find("div", id="dp-container")
+        if all_product_section:
+        	center_product_section = all_product_section.find("div", class_="centerColAlign")
+       		right_product_section = all_product_section.find("div", id="rightCol")
+        	left_product_section = all_product_section.find("div", id="leftCol")
+       		name = await getAmazonProductTitleName(center_product_section)
+        	price = await getAmazonProductPrice(center_product_section)
+        	rating_star = await getAmazonProductRatingStar(center_product_section)
+        	rating_count = await getAmazonProductRatingCount(center_product_section)
+        	description = await getAmazonProductDescription(center_product_section)
+        	exchange_offer = await getAmazonProductExchangeAmount(right_product_section)
+        	image = left_product_section.find("ul",
+                                          class_="a-unordered-list a-nostyle a-button-list a-vertical a-spacing-top-extra-large regularAltImageViewLayout")
+        	images = [n.get('src') for li in image.findAll("span", class_="a-button-inner") for n in
+                  li.find_all('img') if n.get('src') is not None] if image else []
+        	return {'name': name, 'description': description, 'ratingStar': rating_star,
+                'ratingCount': rating_count, 'price': price, 'exchange': exchange_offer, 'image': images,
+                'link': link}
+
+@app.get("/v9/amazon/{search_query}")
+async def search_amazon_products(search_query: str, page: int = 1, page_size: int = 30) -> List[dict]:
+    start_time = time.time()
+    products = []
+    start_index = (page - 1) * page_size
+    url = f"https://www.amazon.in/s?k={search_query}&page={page}"
+    links_list = []
+    while not links_list:
+        html = await get_html(url)
+        soup = BeautifulSoup(html, "html.parser")
+        links = soup.find_all("a", class_="a-link-normal s-no-outline")
+        links_list = [link.get("href") for link in links]
+
+    updated_list = links_list[start_index:start_index + page_size]
+
+    # Create a task for each link and run them concurrently using asyncio.wait
+    tasks = [fetch_product_data(link) for link in updated_list]
+    done, _ = await asyncio.wait(tasks)
+
+    # Retrieve the results of all the completed tasks
+    for task in done:
+        result = task.result()
+        if result is not None:
+            products.append(result)
+    end_time = time.time()
+    total_time_ms = (end_time - start_time) * 1000
+    print(f"Total time taken: {total_time_ms} ms")
+    return products
+

@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 from fastapi import FastAPI,Request
 
 import httpx
+from pydantic import BaseModel
 
 from ProductDetails import Product
 
@@ -801,47 +802,41 @@ from fastapi import FastAPI, HTTPException
 app = FastAPI()
 
 
-async def fetch_html(url: str) -> str:
-    async with aiohttp.ClientSession() as session:
-        async with async_timeout.timeout(10):
-            async with session.get(url) as response:
-                return await response.text()
+class ProductLink(BaseModel):
+    link: str
 
-
-async def extract_product_data(html: str, link: str) -> Optional[dict]:
+# define the async function
+async def fetch_product_data(link: str) -> dict:
+    url = urljoin('https://www.amazon.in', link)
+    html = await get_html(url)
     soup = BeautifulSoup(html, "html.parser")
     all_product_section = soup.find("div", id="dp-container")
     while all_product_section is None:
+        # Retry fetching the HTML page up to 3 times
+        html = await get_html(url)
+        soup = BeautifulSoup(html, "html.parser")
         all_product_section = soup.find("div", id="dp-container")
-        if all_product_section is not None:
+
+        if all_product_section:
             center_product_section = all_product_section.find("div", class_="centerColAlign")
             right_product_section = all_product_section.find("div", id="rightCol")
             left_product_section = all_product_section.find("div", id="leftCol")
-
             name = await getAmazonProductTitleName(center_product_section)
             price = await getAmazonProductPrice(center_product_section)
             rating_star = await getAmazonProductRatingStar(center_product_section)
             rating_count = await getAmazonProductRatingCount(center_product_section)
             description = await getAmazonProductDescription(center_product_section)
             exchange_offer = await getAmazonProductExchangeAmount(right_product_section)
-
             image = left_product_section.find("ul",
                                               class_="a-unordered-list a-nostyle a-button-list a-vertical a-spacing-top-extra-large regularAltImageViewLayout")
             images = [n.get('src') for li in image.findAll("span", class_="a-button-inner") for n in
                       li.find_all('img') if n.get('src') is not None] if image else []
-
             return {'name': name, 'description': description, 'ratingStar': rating_star,
                     'ratingCount': rating_count, 'price': price, 'exchange': exchange_offer, 'image': images,
                     'link': link}
 
-
-
-@app.post("/v13/")
-async def fetch_product_data(request: Request):
-    link = await request.json()
-    url = urljoin('https://www.amazon.in/', str(link))
-    html = await fetch_html(url)
-    product_data = await extract_product_data(html, link)
-    if product_data is None:
-        raise HTTPException(status_code=404, detail="Product not found")
-    return product_data
+# define the endpoint
+@app.post("/product-data")
+async def get_product_data(link: ProductLink):
+    data = await fetch_product_data(link.link)
+    return data

@@ -584,25 +584,34 @@ async def fetch_product_data_v3(link: str) -> dict:
     url = urljoin('https://www.amazon.in', link)
     html = await get_html_v2(url)
     soup = BeautifulSoup(html, "html.parser")
-
-    center_product_section = soup.select_one("#dp-container div.centerColAlign")
-    right_product_section = soup.select_one("#dp-container #rightCol")
-    left_product_section = soup.select_one("#dp-container #leftCol")
-
-    name = await getAmazonProductTitleName(center_product_section)
-    price = await getAmazonProductPrice(center_product_section)
-    rating_star = await getAmazonProductRatingStar(center_product_section)
-    rating_count = await getAmazonProductRatingCount(center_product_section)
-    description = await getAmazonProductDescription(center_product_section)
-    exchange_offer = await getAmazonProductExchangeAmount(right_product_section)
-
-    image = soup.select_one(
-        "ul.a-unordered-list.a-nostyle.a-button-list.a-vertical.a-spacing-top-extra-large.regularAltImageViewLayout")
-    images = [img["src"] for img in image.select("span.a-button-inner img[src]")] if image else []
-
-    return {'name': name, 'description': description, 'ratingStar': rating_star,
-            'ratingCount': rating_count, 'price': price, 'exchange': exchange_offer, 'image': images,
-            'link': link}
+    all_product_section = soup.select_one("#dp-container")
+    while all_product_section is None:
+        # Retry fetching the HTML page up to 3 times
+        html = await get_html_v2(url)
+        soup = BeautifulSoup(html, "html.parser")
+        all_product_section = soup.select_one("#dp-container")
+    if all_product_section:
+        center_product_section = all_product_section.select_one(".centerColAlign")
+        right_product_section = all_product_section.select_one("#rightCol")
+        left_product_section = all_product_section.select_one("#leftCol")
+        name = await getAmazonProductTitleName(center_product_section)
+        price = await getAmazonProductPrice(center_product_section)
+        rating_star = await getAmazonProductRatingStar(center_product_section)
+        rating_count = await getAmazonProductRatingCount(center_product_section)
+        description = await getAmazonProductDescription(center_product_section)
+        exchange_offer = await getAmazonProductExchangeAmount(right_product_section)
+        image = left_product_section.select_one(".regularAltImageViewLayout img[src]")
+        images = [img["src"] for img in left_product_section.select(".regularImageLayout img[src]")]
+        return {
+            "name": name,
+            "description": description,
+            "ratingStar": rating_star,
+            "ratingCount": rating_count,
+            "price": price,
+            "exchange": exchange_offer,
+            "image": [image["src"]] + images if image else images,
+            "link": link,
+        }
 
 
 async def fetch_product_data(link: str) -> dict:

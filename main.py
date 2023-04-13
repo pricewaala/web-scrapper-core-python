@@ -811,27 +811,28 @@ async def fetch_html(url: str) -> str:
 async def extract_product_data(html: str, link: str) -> Optional[dict]:
     soup = BeautifulSoup(html, "html.parser")
     all_product_section = soup.find("div", id="dp-container")
-    if all_product_section is None:
+    while all_product_section is None:
         all_product_section = soup.find("div", id="dp-container")
-        center_product_section = all_product_section.find("div", class_="centerColAlign")
-        right_product_section = all_product_section.find("div", id="rightCol")
-        left_product_section = all_product_section.find("div", id="leftCol")
+        if all_product_section is not None:
+            center_product_section = all_product_section.find("div", class_="centerColAlign")
+            right_product_section = all_product_section.find("div", id="rightCol")
+            left_product_section = all_product_section.find("div", id="leftCol")
 
-        name = await getAmazonProductTitleName(center_product_section)
-        price = await getAmazonProductPrice(center_product_section)
-        rating_star = await getAmazonProductRatingStar(center_product_section)
-        rating_count = await getAmazonProductRatingCount(center_product_section)
-        description = await getAmazonProductDescription(center_product_section)
-        exchange_offer = await getAmazonProductExchangeAmount(right_product_section)
+            name = await getAmazonProductTitleName(center_product_section)
+            price = await getAmazonProductPrice(center_product_section)
+            rating_star = await getAmazonProductRatingStar(center_product_section)
+            rating_count = await getAmazonProductRatingCount(center_product_section)
+            description = await getAmazonProductDescription(center_product_section)
+            exchange_offer = await getAmazonProductExchangeAmount(right_product_section)
 
-        image = left_product_section.find("ul",
-                                          class_="a-unordered-list a-nostyle a-button-list a-vertical a-spacing-top-extra-large regularAltImageViewLayout")
-        images = [n.get('src') for li in image.findAll("span", class_="a-button-inner") for n in
-                  li.find_all('img') if n.get('src') is not None] if image else []
+            image = left_product_section.find("ul",
+                                              class_="a-unordered-list a-nostyle a-button-list a-vertical a-spacing-top-extra-large regularAltImageViewLayout")
+            images = [n.get('src') for li in image.findAll("span", class_="a-button-inner") for n in
+                      li.find_all('img') if n.get('src') is not None] if image else []
 
-        return {'name': name, 'description': description, 'ratingStar': rating_star,
-                'ratingCount': rating_count, 'price': price, 'exchange': exchange_offer, 'image': images,
-                'link': link}
+            return {'name': name, 'description': description, 'ratingStar': rating_star,
+                    'ratingCount': rating_count, 'price': price, 'exchange': exchange_offer, 'image': images,
+                    'link': link}
 
 
 

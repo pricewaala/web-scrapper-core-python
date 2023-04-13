@@ -580,8 +580,9 @@ async def fetch_product_data_v2(link: str) -> dict:
         right_product_section = all_product_section.find("div", id="rightCol")
         left_product_section = all_product_section.find("div", id="leftCol")
         left_center_product_section = all_product_section.find("div", id="leftCol")
+        name = None
         if left_center_product_section is not None:
-            name = await getAmazonProductTitleNameV2(center_product_section , left_center_product_section)
+            name = await getAmazonProductTitleNameV2(center_product_section, left_center_product_section)
         price = await getAmazonProductPrice(center_product_section)
         rating_star = await getAmazonProductRatingStar(center_product_section)
         rating_count = await getAmazonProductRatingCount(center_product_section)

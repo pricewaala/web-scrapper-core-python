@@ -74,6 +74,20 @@ async def getAmazonProductTitleName(product_section):
     return name
 
 
+async def getAmazonProductTitleNameV2(center_product_section, left_center_product_section):
+    name = center_product_section.find("span", class_="a-size-large product-title-word-break")
+    if name is None:
+        name1 = left_center_product_section.find("span", id="productTitle")
+        if name1 is None:
+            name1 = None
+        else:
+            name1 = name1.text.strip()
+            name = name1
+    else:
+        name = name.text.strip()
+    return name
+
+
 async def getAmazonProductPrice(product_section):
     price = product_section.find("span", class_="a-price-whole")
     if price is None:
@@ -565,7 +579,9 @@ async def fetch_product_data_v2(link: str) -> dict:
         center_product_section = all_product_section.find("div", id="centerCol")
         right_product_section = all_product_section.find("div", id="rightCol")
         left_product_section = all_product_section.find("div", id="leftCol")
-        name = await getAmazonProductTitleName(center_product_section)
+        left_center_product_section = all_product_section.find("div", id="leftCol")
+        if left_center_product_section is not None:
+            name = await getAmazonProductTitleNameV2(center_product_section , left_center_product_section)
         price = await getAmazonProductPrice(center_product_section)
         rating_star = await getAmazonProductRatingStar(center_product_section)
         rating_count = await getAmazonProductRatingCount(center_product_section)

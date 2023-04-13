@@ -8,7 +8,7 @@ import grequests
 import redis
 import requests
 from bs4 import BeautifulSoup
-from fastapi import FastAPI
+from fastapi import FastAPI,Request
 
 import httpx
 
@@ -836,10 +836,11 @@ async def extract_product_data(html: str, link: str) -> Optional[dict]:
 
 
 
-@app.get("/v13/{link}")
-async def fetch_product_data(link: str) -> dict:
+@app.post("/v13/")
+async def fetch_product_data(request: Request):
+    link = await request.json()
     url = urljoin('https://www.amazon.in', link)
-    html = await fetch_html(url)
+    html = await get_html(url)
     product_data = await extract_product_data(html, link)
     if product_data is None:
         raise HTTPException(status_code=404, detail="Product not found")

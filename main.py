@@ -789,3 +789,57 @@ async def search_amazon_products(search_query: str, page: int = 1, page_size: in
     total_time_ms = (end_time - start_time) * 1000
     print(f"Total time taken: {total_time_ms} ms")
     return links_list
+
+
+from typing import Optional
+import asyncio
+import aiohttp
+import async_timeout
+from bs4 import BeautifulSoup
+from fastapi import FastAPI, HTTPException
+
+app = FastAPI()
+
+
+async def fetch_html(url: str) -> str:
+    async with aiohttp.ClientSession() as session:
+        async with async_timeout.timeout(10):
+            async with session.get(url) as response:
+                return await response.text()
+
+
+async def extract_product_data(html: str, link: str) -> Optional[dict]:
+    soup = BeautifulSoup(html, "html.parser")
+    all_product_section = soup.find("div", id="dp-container")
+    if all_product_section is None:
+        all_product_section = soup.find("div", id="dp-container")
+        center_product_section = all_product_section.find("div", class_="centerColAlign")
+        right_product_section = all_product_section.find("div", id="rightCol")
+        left_product_section = all_product_section.find("div", id="leftCol")
+
+        name = await getAmazonProductTitleName(center_product_section)
+        price = await getAmazonProductPrice(center_product_section)
+        rating_star = await getAmazonProductRatingStar(center_product_section)
+        rating_count = await getAmazonProductRatingCount(center_product_section)
+        description = await getAmazonProductDescription(center_product_section)
+        exchange_offer = await getAmazonProductExchangeAmount(right_product_section)
+
+        image = left_product_section.find("ul",
+                                          class_="a-unordered-list a-nostyle a-button-list a-vertical a-spacing-top-extra-large regularAltImageViewLayout")
+        images = [n.get('src') for li in image.findAll("span", class_="a-button-inner") for n in
+                  li.find_all('img') if n.get('src') is not None] if image else []
+
+        return {'name': name, 'description': description, 'ratingStar': rating_star,
+                'ratingCount': rating_count, 'price': price, 'exchange': exchange_offer, 'image': images,
+                'link': link}
+
+
+
+@app.get("/v13/{link}")
+async def fetch_product_data(link: str) -> dict:
+    url = urljoin('https://www.amazon.in', link)
+    html = await fetch_html(url)
+    product_data = await extract_product_data(html, link)
+    if product_data is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return product_data

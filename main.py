@@ -562,7 +562,7 @@ async def fetch_product_data_v2(link: str) -> dict:
         soup = BeautifulSoup(html, "html.parser")
         all_product_section = soup.find("div", id="dp-container")
     if all_product_section:
-        center_product_section = all_product_section.find("div", class_="centerColAlign")
+        center_product_section = all_product_section.find("div", id="centerCol")
         right_product_section = all_product_section.find("div", id="rightCol")
         left_product_section = all_product_section.find("div", id="leftCol")
         name = await getAmazonProductTitleName(center_product_section)

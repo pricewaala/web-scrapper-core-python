@@ -839,8 +839,8 @@ async def extract_product_data(html: str, link: str) -> Optional[dict]:
 @app.post("/v13/")
 async def fetch_product_data(request: Request):
     link = await request.json()
-    url = urljoin('https://www.amazon.in', link)
-    html = await get_html(url)
+    url = urljoin('https://www.amazon.in/', str(link))
+    html = await fetch_html(url)
     product_data = await extract_product_data(html, link)
     if product_data is None:
         raise HTTPException(status_code=404, detail="Product not found")

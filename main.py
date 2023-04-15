@@ -791,30 +791,7 @@ async def search_amazon_products(search_query: str, page: int = 1, page_size: in
 
 
 ## getlistoflinks
-@app.get("/v12/amazon/{search_query}")
-async def search_amazon_products(search_query: str, page: int = 1, page_size: int = 30) -> List[str]:
-    start_time = time.time()
-    links_list = []
-    start_index = (page - 1) * page_size
-    url = f"https://www.amazon.in/s?k={search_query}&page={page}"
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url)
-    soup = BeautifulSoup(response.text, "html.parser")
-    links = soup.find_all("a", class_="a-link-normal s-no-outline")
-    links_list = [link.get("href") for link in links]
 
-    # Retry fetching the links up to 3 times until the links_list is populated
-    while not links_list:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url)
-        soup = BeautifulSoup(response.text, "html.parser")
-        links = soup.find_all("a", class_="a-link-normal s-no-outline")
-        links_list = [link.get("href") for link in links]
-
-    end_time = time.time()
-    total_time_ms = (end_time - start_time) * 1000
-    print(f"Total time taken: {total_time_ms} ms")
-    return links_list
 
 
 from typing import Optional
@@ -823,9 +800,6 @@ import aiohttp
 import async_timeout
 from bs4 import BeautifulSoup
 from fastapi import FastAPI, HTTPException
-
-app = FastAPI()
-
 
 class ProductLink(BaseModel):
     link: str
@@ -860,6 +834,30 @@ async def fetch_product_data(link: str) -> dict:
                     'ratingCount': rating_count, 'price': price, 'exchange': exchange_offer, 'image': images,
                     'link': link}
 
+@app.get("/detail/amazon/{search_query}")
+async def search_amazon_products(search_query: str, page: int = 1, page_size: int = 30) -> List[str]:
+    start_time = time.time()
+    links_list = []
+    start_index = (page - 1) * page_size
+    url = f"https://www.amazon.in/s?k={search_query}&page={page}"
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+    soup = BeautifulSoup(response.text, "html.parser")
+    links = soup.find_all("a", class_="a-link-normal s-no-outline")
+    links_list = [link.get("href") for link in links]
+
+    # Retry fetching the links up to 3 times until the links_list is populated
+    while not links_list:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+        soup = BeautifulSoup(response.text, "html.parser")
+        links = soup.find_all("a", class_="a-link-normal s-no-outline")
+        links_list = [link.get("href") for link in links]
+
+    end_time = time.time()
+    total_time_ms = (end_time - start_time) * 1000
+    print(f"Total time taken: {total_time_ms} ms")
+    return links_list
 # define the endpoint
 @app.post("/product-data")
 async def get_product_data(link: ProductLink):

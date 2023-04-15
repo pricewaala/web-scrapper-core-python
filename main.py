@@ -834,7 +834,7 @@ async def fetch_product_data(link: str) -> dict:
                     'ratingCount': rating_count, 'price': price, 'exchange': exchange_offer, 'image': images,
                     'link': link}
 
-@app.get("/detail/amazon/{search_query}")
+@app.get("/v12/amazon/{search_query}")
 async def search_amazon_products(search_query: str, page: int = 1, page_size: int = 30) -> List[str]:
     start_time = time.time()
     links_list = []

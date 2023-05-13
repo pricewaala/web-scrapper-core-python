@@ -858,6 +858,41 @@ async def search_amazon_products(search_query: str, page: int = 1, page_size: in
     total_time_ms = (end_time - start_time) * 1000
     print(f"Total time taken: {total_time_ms} ms")
     return links_list
+
+## java alternative v2 method
+@app.get("/v2/amazon/{search_query}")
+async def search_amazon_products(search_query: str, page: int = 1, page_size: int = 30) -> List[str]:
+    start_time = time.time()
+    links_list = []
+    start_index = (page - 1) * page_size
+    url = f"https://www.amazon.in/s?k={search_query}&page={page}"
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+    soup = BeautifulSoup(response.text, "html.parser")
+    links = soup.select_one("div.s-card-container.s-overflow-hidden.aok-relative.puis-wide-grid-style")
+
+    print(links)
+
+    # links_list = [link.get("href") for link in links]
+
+    # Retry fetching the links up to 3 times until the links_list is populated
+    while not links_list:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+        soup = BeautifulSoup(response.text, "html.parser")
+        links = soup.select_one("div.s-card-container.s-overflow-hidden.aok-relative.puis-wide-grid-style")
+
+        #     sg_row_div = link.find("div", class_="sg-row")
+        #     print(sg_row_div)
+        print(links)
+        if links:
+            break
+        # links_list = [link.get("href") for link in links]
+
+    end_time = time.time()
+    total_time_ms = (end_time - start_time) * 1000
+    print(f"Total time taken: {total_time_ms} ms")
+    return links_list
 # define the endpoint
 @app.post("/product-data")
 async def get_product_data(link: ProductLink):

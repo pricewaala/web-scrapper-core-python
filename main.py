@@ -1,6 +1,8 @@
 import asyncio
 import concurrent
 import time
+import urllib
+import cv2
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor
 
@@ -8,7 +10,7 @@ import grequests
 import redis
 import requests
 from bs4 import BeautifulSoup
-from fastapi import FastAPI,Request
+from fastapi import FastAPI, Request
 
 import httpx
 from pydantic import BaseModel
@@ -487,6 +489,7 @@ async def fetch_product_data(session, link):
 
     return product
 
+
 async def fetch_product_data_v2(link):
     url = f"https://www.amazon.in{link}"
     while True:
@@ -512,6 +515,7 @@ async def fetch_product_data_v2(link):
                               link=link)
             print(product)
             return product
+
 
 # async def update_redis_cache(redis_url, products):
 #     redis = await aioredis.create_redis_pool(redis_url)
@@ -793,7 +797,6 @@ async def search_amazon_products(search_query: str, page: int = 1, page_size: in
 ## getlistoflinks
 
 
-
 from typing import Optional
 import asyncio
 import aiohttp
@@ -801,8 +804,10 @@ import async_timeout
 from bs4 import BeautifulSoup
 from fastapi import FastAPI, HTTPException
 
+
 class ProductLink(BaseModel):
     link: str
+
 
 # define the async function
 async def fetch_product_data(link: str) -> dict:
@@ -834,6 +839,7 @@ async def fetch_product_data(link: str) -> dict:
                     'ratingCount': rating_count, 'price': price, 'exchange': exchange_offer, 'image': images,
                     'link': link}
 
+
 @app.get("/v12/amazon/{search_query}")
 async def search_amazon_products(search_query: str, page: int = 1, page_size: int = 30) -> List[str]:
     start_time = time.time()
@@ -858,6 +864,7 @@ async def search_amazon_products(search_query: str, page: int = 1, page_size: in
     total_time_ms = (end_time - start_time) * 1000
     print(f"Total time taken: {total_time_ms} ms")
     return links_list
+
 
 ## java alternative v2 method
 @app.get("/v2/amazon/{search_query}")
@@ -893,6 +900,8 @@ async def search_amazon_products(search_query: str, page: int = 1, page_size: in
     total_time_ms = (end_time - start_time) * 1000
     print(f"Total time taken: {total_time_ms} ms")
     return links_list
+
+
 # define the endpoint
 @app.post("/product-data")
 async def get_product_data(link: ProductLink):
@@ -900,3 +909,26 @@ async def get_product_data(link: ProductLink):
     return data
 
 
+@app.get("/trial-data")
+async def get_product_datav2():
+    x = compare_images("https://m.media-amazon.com/images/I/619f09kK7tL._AC_UY545_FMwebp_QL65_.jpg%202.5x,%20https://m.media-amazon.com/images/I/619f09kK7tL._AC_UY654_FMwebp_QL65_.jpg", "https://rukminim1.flixcart.com/image/312/312/kg8avm80/mobile/q/8/f/apple-iphone-12-dummyapplefsn-original-imafwg8dbzv8vh7t.jpeg?q=70")
+    return x
+
+
+def compare_images(image1_url, image2_url):
+    # Download the images from the URLs
+    urllib.request.urlretrieve(image1_url, "image1.jpg")
+    urllib.request.urlretrieve(image2_url, "image2.jpg")
+
+    # Read the downloaded images
+    image1 = cv2.imread("image1.jpg")
+    image2 = cv2.imread("image2.jpg")
+
+    # Convert the images to grayscale
+    gray_image1 = cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)
+    gray_image2 = cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)
+
+    # Calculate the structural similarity index (SSIM) between the two images
+    (_, similarity_score) = cv2.compareSSIM(gray_image1, gray_image2, full=True)
+
+    return similarity_score

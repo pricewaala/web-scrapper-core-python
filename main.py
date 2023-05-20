@@ -2,9 +2,19 @@ import asyncio
 import concurrent
 import time
 import urllib
+import imagehash
+from PIL import Image
+
 import cv2
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor
+
+import cv2
+import numpy as np
+from skimage.feature import hog
+from skimage import color
+
+from skimage.metrics import structural_similarity as ssim
 
 import grequests
 import redis
@@ -911,24 +921,188 @@ async def get_product_data(link: ProductLink):
 
 @app.get("/trial-data")
 async def get_product_datav2():
-    x = compare_images("https://m.media-amazon.com/images/I/619f09kK7tL._AC_UY545_FMwebp_QL65_.jpg%202.5x,%20https://m.media-amazon.com/images/I/619f09kK7tL._AC_UY654_FMwebp_QL65_.jpg", "https://rukminim1.flixcart.com/image/312/312/kg8avm80/mobile/q/8/f/apple-iphone-12-dummyapplefsn-original-imafwg8dbzv8vh7t.jpeg?q=70")
+    x = compare_images_v2("/Users/abhinavpersonal/Downloads/iphone-13-mlpg3hn-a-apple-original-imag6vpyghayhhrh.jpeg",
+                          "/Users/abhinavpersonal/Downloads/amz.webp")
     return x
 
 
-def compare_images(image1_url, image2_url):
-    # Download the images from the URLs
-    urllib.request.urlretrieve(image1_url, "image1.jpg")
-    urllib.request.urlretrieve(image2_url, "image2.jpg")
+def compare_images_v2(image1_path, image2_path):
+    # Read the images
+    image1 = cv2.imread(image1_path)
+    image2 = cv2.imread(image2_path)
 
-    # Read the downloaded images
-    image1 = cv2.imread("image1.jpg")
-    image2 = cv2.imread("image2.jpg")
-
-    # Convert the images to grayscale
+    # Convert images to grayscale
     gray_image1 = cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)
     gray_image2 = cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)
 
-    # Calculate the structural similarity index (SSIM) between the two images
-    (_, similarity_score) = cv2.compareSSIM(gray_image1, gray_image2, full=True)
+    sift = cv2.SIFT_create()
 
-    return similarity_score
+    keypoints1, descriptors1 = sift.detectAndCompute(gray_image1, None)
+    keypoints2, descriptors2 = sift.detectAndCompute(gray_image2, None)
+
+    # Create a brute-force matcher
+    bf = cv2.BFMatcher()
+
+    # Match descriptors
+    matches = bf.knnMatch(descriptors1, descriptors2, k=2)
+
+    # Apply ratio test to filter good matches
+    good_matches = []
+    for m, n in matches:
+        if m.distance < 0.75 * n.distance:
+            good_matches.append(m)
+
+    # Extract matching keypoints
+    src_points = np.float32([keypoints1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+    dst_points = np.float32([keypoints2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+
+    # Apply RANSAC to estimate the best transformation matrix
+    _, mask = cv2.findHomography(src_points, dst_points, cv2.RANSAC, 5.0)
+
+    # Calculate the percentage of inlier matches
+    inlier_ratio = np.sum(mask) / len(mask)
+
+    # Calculate the color histograms
+    color_hist1 = cv2.calcHist([image1], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
+    color_hist2 = cv2.calcHist([image2], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
+
+    # Normalize the histograms
+    cv2.normalize(color_hist1, color_hist1)
+    cv2.normalize(color_hist2, color_hist2)
+
+    # Calculate the Euclidean distance between color histograms
+    color_distance = cv2.compareHist(color_hist1, color_hist2, cv2.HISTCMP_BHATTACHARYYA)
+
+    # Set thresholds for inlier ratio and color distance
+    inlier_threshold = 0.5  # Adjust this value as needed
+    color_threshold = 0.5  # Adjust this value as needed
+
+    print(inlier_ratio)
+    print(color_distance)
+
+    # Compare the inlier ratio and color distance with the thresholds
+    if inlier_ratio >= inlier_threshold and color_distance <= color_threshold:
+        return True  # Images are similar or identical
+    else:
+        return False  # Images are different
+
+
+def compare_images(image1_path, image2_path):
+    # Read the images
+    image1 = cv2.imread(image1_path)
+    image2 = cv2.imread(image2_path)
+
+    # # Resize the images to the same size
+    # image1 = cv2.resize(image1, (300, 300))
+    # image2 = cv2.resize(image2, (300, 300))
+
+    # Convert images to grayscale
+    gray_image1 = cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)
+    gray_image2 = cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)
+
+    sift = cv2.SIFT_create()
+
+    keypoints1, descriptors1 = sift.detectAndCompute(gray_image1, None)
+    keypoints2, descriptors2 = sift.detectAndCompute(gray_image2, None)
+
+    # Create a brute-force matcher
+    bf = cv2.BFMatcher()
+
+    # Match descriptors
+    matches = bf.knnMatch(descriptors1, descriptors2, k=2)
+
+    # Apply ratio test to filter good matches
+    good_matches = []
+    for m, n in matches:
+        if m.distance < 0.75 * n.distance:
+            good_matches.append(m)
+
+    # Calculate the color histograms
+    color_hist1 = cv2.calcHist([image1], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
+    color_hist2 = cv2.calcHist([image2], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
+
+    # Normalize the histograms
+    cv2.normalize(color_hist1, color_hist1)
+    cv2.normalize(color_hist2, color_hist2)
+
+    # Calculate the Euclidean distance between HOG features and color histograms
+    color_distance = cv2.compareHist(color_hist1, color_hist2, cv2.HISTCMP_BHATTACHARYYA)
+
+    # Set thresholds for the distances
+    match_threshold = 10  # Adjust this value as needed
+    color_threshold = 0.5  # Adjust this value as needed
+
+    print(len(good_matches))
+    print(color_distance)
+
+    # Compare the distances with the thresholds
+    if len(good_matches) >= match_threshold and color_distance <= color_threshold:
+        return True  # Images are similar or identical
+    else:
+        return False  # Images are different
+
+    # Read the images
+    # image1 = cv2.imread(image1_path)
+    # image2 = cv2.imread(image2_path)
+    #
+    # # Resize the images to the same size
+    # image1 = cv2.resize(image1, (300, 300))
+    # image2 = cv2.resize(image2, (300, 300))
+    #
+    # # Create a SIFT detector
+    # sift = cv2.SIFT_create()
+    #
+    # # Detect keypoints and compute descriptors for both grayscale images
+    # gray_image1 = cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)
+    # gray_image2 = cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)
+    # keypoints1, descriptors1 = sift.detectAndCompute(gray_image1, None)
+    # keypoints2, descriptors2 = sift.detectAndCompute(gray_image2, None)
+    #
+    # # Create a brute-force matcher
+    # bf = cv2.BFMatcher()
+    #
+    # # Match descriptors
+    # matches = bf.knnMatch(descriptors1, descriptors2, k=2)
+    #
+    # # Apply ratio test to filter good matches
+    # good_matches = []
+    # for m, n in matches:
+    #     if m.distance < 0.75 * n.distance:
+    #         good_matches.append(m)
+    #
+    # # Calculate color similarity
+    # color_diff = cv2.norm(image1, image2, cv2.NORM_L2)
+    #
+    # # Set a threshold for the number of good matches and color difference
+    # match_threshold = 10  # Adjust this value as needed
+    # color_threshold = 500  # Adjust this value as needed
+    #
+    # print(len(good_matches))
+    # print(color_diff)
+    #
+    # # Compare the number of good matches and color difference with the thresholds
+    # if len(good_matches) >= match_threshold and color_diff <= color_threshold:
+    #     return True  # Images are similar or identical
+    # else:
+    #     return False  # Images are different
+    # # Read the images
+    # image1 = cv2.imread(image1_path, cv2.IMREAD_GRAYSCALE)
+    # image2 = cv2.imread(image2_path, cv2.IMREAD_GRAYSCALE)
+    #
+    # # Compute the perceptual hash of the images
+    # hash1 = imagehash.average_hash(Image.fromarray(image1))
+    # hash2 = imagehash.average_hash(Image.fromarray(image2))
+    #
+    # # Set a threshold for hash difference
+    # threshold = 0  # Adjust this value as needed
+    #
+    # # Calculate the Hamming distance between the hashes
+    # hamming_distance = hash1 - hash2
+    #
+    # print(hamming_distance)
+    #
+    # # Compare the Hamming distance with the threshold
+    # if hamming_distance <= threshold:
+    #     return True  # Images are similar or identical
+    # else:
+    #     return False  # Images are different
